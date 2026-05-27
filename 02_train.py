@@ -40,27 +40,29 @@ from drive2win.normalize import (
 def my_backward(x, y_target, w, cache):
     n = x.shape[0]
     y = cache["y"]
-    dy  = 2 * (y - y_target) / (n * y.shape[1])
-    dz3 = dy * (1 - y * y)
-    dW3 = cache["a2"].T @ dz3
-    db3 = dz3.sum(axis=0)
-    da2 = dz3 @ w["W3"].T
-    dz2 = da2 * (cache["z2"] > 0)
-    dW2 = cache["a1"].T @ dz2
-    db2 = dz2.sum(axis=0)
-    da1 = dz2 @ w["W2"].T
-    dz1 = da1 * (cache["z1"] > 0)
-    dW1 = x.T @ dz1
-    db1 = dz1.sum(axis=0)
+    # --- output ---
+    dy  = ...   # 2 * (y - y_target) / (n * y.shape[1])
+    dz3 = ...   # tanh derivative: dy * (1 - y * y)
+    dW3 = ...   # cache["a2"].T @ dz3
+    db3 = ...   # dz3.sum(axis=0)
+    # --- hidden 2 ---
+    da2 = ...   # dz3 @ w["W3"].T
+    dz2 = ...   # ReLU mask: da2 * (cache["z2"] > 0)
+    dW2 = ...   # cache["a1"].T @ dz2
+    db2 = ...
+    # --- hidden 1 ---
+    da1 = ...
+    dz1 = ...
+    dW1 = ...   # x.T @ dz1
+    db1 = ...
     return {"W1": dW1, "b1": db1, "W2": dW2, "b2": db2, "W3": dW3, "b3": db3}
+
 
 def gradient_check():
     rng = np.random.default_rng(0)
     w = nn_mod.init_weights(seed=0)
-    # cast everything to float64 for numerical precision
-    w = {k: v.astype(np.float64) for k, v in w.items()}
-    x = rng.normal(size=(8, N_FEATURES)).astype(np.float64)
-    y = rng.uniform(-1, 1, size=(8, N_ACTIONS)).astype(np.float64)
+    x = rng.normal(size=(8, N_FEATURES)).astype(np.float32)
+    y = rng.uniform(-1, 1, size=(8, N_ACTIONS)).astype(np.float32)
     cache = nn_mod.forward_all(x, w)
     grads = my_backward(x, y, w, cache)
 
