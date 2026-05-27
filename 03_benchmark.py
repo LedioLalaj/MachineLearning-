@@ -2,11 +2,9 @@
 
 Run:  python 03_benchmark.py --tag v1
 
-What it does:
-  1. Runs evaluation on multiple map seeds.
-  2. Logs results to benchmarks/<tag>.json.
-  3. Saves diagnostic plots for analysis.
+Now: each run selects ONE seed from the seed list and benchmarks only on it.
 """
+
 from __future__ import annotations
 import argparse
 import json
@@ -31,10 +29,10 @@ def main():
                     help="Optional model module override.")
 
     ap.add_argument("--seeds", type=int, nargs="+", default=None,
-                    help="Map seeds to evaluate on. If not set, uses fixed test suite.")
+                    help="Pool of seeds to sample from for benchmarking.")
 
     ap.add_argument("--runs", type=int, default=5,
-                    help="Number of runs per seed.")
+                    help="Number of evaluation runs on the selected seed.")
 
     ap.add_argument("--duration", type=float, default=60.0,
                     help="Max duration per run.")
@@ -45,50 +43,52 @@ def main():
     args = ap.parse_args()
 
     # ------------------------------------------------------------
-    # Default evaluation seeds (fixed benchmark suite)
+    # Default seed pool
     # ------------------------------------------------------------
     if args.seeds is None:
         args.seeds = [7, 21, 42, 84, 1337]
+
+    rng = np.random.default_rng()
+
+    # ------------------------------------------------------------
+    # Pick ONE seed only
+    # ------------------------------------------------------------
+    chosen_seed = int(rng.choice(args.seeds))
+    print(f"\n=== Selected evaluation seed: {chosen_seed} ===")
 
     weights = args.weights or f"nav_{args.tag}.npz"
     out_dir = Path("benchmarks")
     out_dir.mkdir(exist_ok=True)
 
-    all_results = []
-
-    for seed in args.seeds:
-        print(f"\n=== Evaluating on seed {seed} ===")
-
-        result = run_benchmark(
-            weights=weights,
-            runs=args.runs,
-            seed=seed,
-            duration=args.duration,
-            module=args.module,
-        )
-
-        all_results.append({"seed": seed, **result})
+    # ------------------------------------------------------------
+    # Run benchmark ONLY on selected seed
+    # ------------------------------------------------------------
+    result = run_benchmark(
+        weights=weights,
+        runs=args.runs,
+        seed=chosen_seed,
+        duration=args.duration,
+        module=args.module,
+    )
 
     # ------------------------------------------------------------
-    # Summary
+    # Print results
     # ------------------------------------------------------------
+    s = result["summary"]
+
     print("\n" + "=" * 60)
     print(f"Iteration: {args.tag} | Weights: {weights}")
-
-    for r in all_results:
-        s = r["summary"]
-        print(
-            f"seed {r['seed']:>5} | "
-            f"completion={int(s['completion_rate'] * s['n_runs'])}/{s['n_runs']} | "
-            f"median_lap={s['median_lap_time']:.2f}s | "
-            f"crashes={s['mean_crashes']:.2f} | "
-            f"max_cp={s['max_checkpoints']}"
-        )
-
+    print(f"Seed: {chosen_seed}")
+    print(
+        f"completion={int(s['completion_rate'] * s['n_runs'])}/{s['n_runs']} | "
+        f"median_lap={s['median_lap_time']:.2f}s | "
+        f"crashes={s['mean_crashes']:.2f} | "
+        f"max_cp={s['max_checkpoints']}"
+    )
     print("=" * 60)
 
     # ------------------------------------------------------------
-    # Save JSON log
+    # Save log
     # ------------------------------------------------------------
     log_path = out_dir / f"{args.tag}.json"
 
@@ -98,14 +98,9 @@ def main():
         "module": args.module,
         "runs_per_seed": args.runs,
         "duration_s": args.duration,
-        "seeds": [
-            {
-                "seed": r["seed"],
-                "summary": r["summary"],
-                "runs": r["runs"],
-            }
-            for r in all_results
-        ],
+        "seed": chosen_seed,
+        "summary": result["summary"],
+        "runs": result["runs"],
     }
 
     log_path.write_text(json.dumps(log, indent=2, default=float))
@@ -114,26 +109,24 @@ def main():
     # ------------------------------------------------------------
     # Visualisations
     # ------------------------------------------------------------
-    flat_runs = [run for r in all_results for run in r["runs"]]
-
     viz.plot_multi_run_paths(
-        flat_runs,
+        result["runs"],
         out=str(out_dir / f"{args.tag}_paths.png"),
-        title=f"All runs — {args.tag}"
+        title=f"Runs — seed {chosen_seed}"
     )
 
     viz.plot_checkpoint_progress(
-        flat_runs,
+        result["runs"],
         out=str(out_dir / f"{args.tag}_progress.png")
     )
 
     # ------------------------------------------------------------
-    # Optional overlay (train vs test trajectories)
+    # Optional overlay
     # ------------------------------------------------------------
     if args.data:
         d = np.load(args.data, allow_pickle=False)
         train_xz = d["positions"] if "positions" in d.files else None
-        first_track = flat_runs[0].get("track") or []
+        first_track = result["runs"][0].get("track") or []
 
         viz.plot_path_overlay(
             train_xz,
