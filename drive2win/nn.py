@@ -144,17 +144,14 @@ def load(path: str) -> dict:
 # ── Gradient check (Part 1, your safety net) ─────────────────────────────
 def numerical_gradient(x: np.ndarray, y_target: np.ndarray, w: dict,
                        key: str, idx: tuple, h: float = 1e-4) -> float:
-    """Two-sided finite difference for ONE entry of one weight matrix.
-
-    Use this to verify your backward() against gold-standard numerical
-    gradients. If your analytic gradient and the numerical one disagree
-    by more than ~1e-4, your backprop has a bug.
-    """
-    w[key][idx] += h
-    loss_p = mse_loss(forward(x, w), y_target)
-    w[key][idx] -= 2 * h
-    loss_m = mse_loss(forward(x, w), y_target)
-    w[key][idx] += h  # restore
+    # Cast everything to float64 so finite differences are accurate
+    w64 = {k: v.astype(np.float64) for k, v in w.items()}
+    x64 = x.astype(np.float64)
+    y64 = y_target.astype(np.float64)
+    w64[key][idx] += h
+    loss_p = mse_loss(forward(x64, w64), y64)
+    w64[key][idx] -= 2 * h
+    loss_m = mse_loss(forward(x64, w64), y64)
     return (loss_p - loss_m) / (2 * h)
 
 
