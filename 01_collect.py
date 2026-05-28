@@ -2,8 +2,8 @@
 
 Run:  python 01_collect.py --tag v1
 
-This version automatically changes the map seed between phases so the
-dataset contains multiple environments instead of one memorised map.
+This version cycles through the same fixed seed pool used by 03_benchmark.py
+so the model is trained and evaluated on the same environments.
 
 Output:  data_<tag>.npz with arrays `states`, `actions`, `positions`, and
 the list `seeds` used during collection.
@@ -18,6 +18,9 @@ from game_client import GameClient
 
 SERVER_URL = "https://ml.ferit.tech"
 API_KEY = "None"  # paste yours if the server requires it
+
+# Must match the seed pool in 03_benchmark.py
+SEED_POOL = [7, 21, 42, 84, 1337]
 
 PHASES = [
     ("Smooth laps",       90, "Hold throttle on straights, smooth steering through corners."),
@@ -58,7 +61,8 @@ def main():
 
     for i, (name, seconds, hint) in enumerate(PHASES, 1):
 
-        phase_seed = np.random.randint(0, 100000)
+        # Cycle through the fixed seed pool instead of random seeds
+        phase_seed = SEED_POOL[(i - 1) % len(SEED_POOL)]
         used_seeds.append(phase_seed)
 
         print(f"\n=== Starting phase {i} with seed {phase_seed} ===")
